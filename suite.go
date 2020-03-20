@@ -21,12 +21,12 @@ package tests
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/caddyserver/certmagic"
 	"math/rand"
 	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -34,7 +34,7 @@ import (
 var (
 	// KeyPrefix is prepended to all tested keys.
 	// If changed, it must not contain a forward slash (/)
-	KeyPrefix = "__test__key__:"
+	KeyPrefix = "__test__key__"
 )
 
 // Suite implements tests for certmagic.Storage.
@@ -79,7 +79,7 @@ func (ts *Suite) testLocker(t *testing.T) {
 	}
 
 	test := func(key string) {
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 5; i++ {
 			if err := ts.S.Lock(key); err != nil {
 				// certmagic lockers can timeout
 				continue
@@ -91,9 +91,9 @@ func (ts *Suite) testLocker(t *testing.T) {
 		}
 	}
 	wg := &sync.WaitGroup{}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		key := ts.randKey()
-		for j := 0; j < 10; j++ {
+		for j := 0; j < 2; j++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -119,6 +119,14 @@ func (ts *Suite) testStorageSingleKey(t *testing.T) {
 		t.Fatalf("Load(%s) should fail: the key was not stored", key)
 	}
 
+	if _, err := sto.Stat(key); err == nil {
+		t.Fatalf("Stat(%s) should fail: the key doesn't exist", key)
+	}
+
+	if err := sto.Store("", []byte{}); err == nil {
+		t.Fatalf("Store() with empty key should fail")
+	}
+
 	if err := sto.Store(key, nil); err != nil {
 		t.Fatalf("Store(%s) with `nil` value failed: %s", key, err)
 	}
@@ -139,7 +147,7 @@ func (ts *Suite) testStorageSingleKey(t *testing.T) {
 	case err != nil:
 		t.Fatalf("Load(%s) failed: %s", key, err)
 	case !bytes.Equal(val, s):
-		t.Fatalf("Load(%s) failed: loaded %q != stored %q", key, s, val)
+		t.Fatalf("Load(%s) failed: loaded %#v != stored %#v", key, s, val)
 	}
 
 	if err := sto.Delete(key); err != nil {
@@ -165,6 +173,14 @@ func (ts *Suite) testStorageDir(t *testing.T) {
 	ts.randKeys = append(ts.randKeys, k1, k2)
 	ts.mu.Unlock()
 
+	if _, err := sto.List(k1, true); err == nil {
+		t.Fatalf("List(%s, true) should fail: the key doesn't exist", k1)
+	}
+
+	if _, err := sto.List(k2, false); err == nil {
+		t.Fatalf("List(%s, false) should fail: the key doesn't exist", k2)
+	}
+
 	if err := sto.Store(k1, val); err != nil {
 		t.Fatalf("Store(%s) failed: %s", k1, err)
 	}
@@ -176,7 +192,7 @@ func (ts *Suite) testStorageDir(t *testing.T) {
 	case err != nil:
 		t.Fatalf("Stat(%s) failed: %s", dir, err)
 	case inf.Key != dir:
-		t.Fatalf("Stat(%s) failed: Key is set to %q", dir, inf.Key)
+		t.Fatalf("Stat(%s) failed: Key is set to %#v", dir, inf.Key)
 	case inf.IsTerminal:
 		t.Fatalf("Stat(%s) failed: IsTerminal should be false for directory keys", dir)
 	}
@@ -185,26 +201,26 @@ func (ts *Suite) testStorageDir(t *testing.T) {
 	case err != nil:
 		t.Fatalf("Stat(%s) failed: %s", k2, err)
 	case inf.Key != k2:
-		t.Fatalf("Stat(%s) failed: Key is set to %q", k2, inf.Key)
+		t.Fatalf("Stat(%s) failed: Key is set to %#v, but should be %#v", k2, inf.Key, k2)
 	case !inf.IsTerminal:
-		t.Fatalf("Stat(%s) failed: IsTerminal should be true for non-directory keys")
+		t.Fatalf("Stat(%s) failed: IsTerminal should be true for non-directory keys", k2)
 	}
 
 	switch ls, err := sto.List(dir, false); {
 	case err != nil:
 		t.Fatalf("List(%s, false) failed: %s", dir, err)
-	case len(ls) != 1 || ls[0] != "k1":
-		t.Fatalf("List(%s, false) failed: it should return [k1], not %v", dir, ls)
+	case len(ls) != 1 || ls[0] != k1:
+		t.Fatalf("List(%s, false) failed: it should return %#v, not %#v", dir, []string{k1}, ls)
 	}
 
 	if ls, err := sto.List(dir, true); err != nil {
 		t.Fatalf("List(%s, true) failed: %s", dir, err)
 	} else {
 		sort.Strings(ls)
-		got := strings.Join(ls, ",")
-		exp := "k/2,k1"
+		got := fmt.Sprintf("%#v", ls)
+		exp := fmt.Sprintf("%#v", []string{k2, k1})
 		if got != exp {
-			t.Fatalf("List(%s, true) failed: it should return [%s], not [%s]", dir, exp, got)
+			t.Fatalf("List(%s, true) failed: it should return %s, not %s", dir, exp, got)
 		}
 	}
 }
