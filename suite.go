@@ -157,10 +157,6 @@ func (ts *Suite) testStorageSingleKey(t *testing.T) {
 	if sto.Exists(key) {
 		t.Fatalf("Deleted key still %s exists", key)
 	}
-
-	if err := sto.Delete(key); err == nil {
-		t.Fatalf("Delete(%s) should fail: the key was already deleted", key)
-	}
 }
 
 func (ts *Suite) testStorageDir(t *testing.T) {
