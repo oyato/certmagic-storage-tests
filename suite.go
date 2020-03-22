@@ -164,9 +164,10 @@ func (ts *Suite) testStorageDir(t *testing.T) {
 	dir := ts.randKey()
 	val := []byte(dir)
 	k1 := dir + "/k1"
-	k2 := dir + "/k/2"
+	k2 := dir + "/k/a/b"
+	k3 := dir + "/k/c"
 	ts.mu.Lock()
-	ts.randKeys = append(ts.randKeys, k1, k2)
+	ts.randKeys = append(ts.randKeys, k1, k2, k3)
 	ts.mu.Unlock()
 
 	if _, err := sto.List(k1, true); err == nil {
@@ -182,6 +183,9 @@ func (ts *Suite) testStorageDir(t *testing.T) {
 	}
 	if err := sto.Store(k2, val); err != nil {
 		t.Fatalf("Store(%s) failed: %s", k2, err)
+	}
+	if err := sto.Store(k3, val); err != nil {
+		t.Fatalf("Store(%s) failed: %s", k3, err)
 	}
 
 	switch inf, err := sto.Stat(dir); {
@@ -202,11 +206,15 @@ func (ts *Suite) testStorageDir(t *testing.T) {
 		t.Fatalf("Stat(%s) failed: IsTerminal should be true for non-directory keys", k2)
 	}
 
-	switch ls, err := sto.List(dir, false); {
-	case err != nil:
+	if ls, err := sto.List(dir, false); err != nil {
 		t.Fatalf("List(%s, false) failed: %s", dir, err)
-	case len(ls) != 1 || ls[0] != k1:
-		t.Fatalf("List(%s, false) failed: it should return %#v, not %#v", dir, []string{k1}, ls)
+	} else {
+		sort.Strings(ls)
+		got := fmt.Sprintf("%#v", ls)
+		exp := fmt.Sprintf("%#v", []string{dir + "/k", k1})
+		if got != exp {
+			t.Fatalf("List(%s, false) failed: it should return %s, not %s", dir, exp, got)
+		}
 	}
 
 	if ls, err := sto.List(dir, true); err != nil {
@@ -214,7 +222,13 @@ func (ts *Suite) testStorageDir(t *testing.T) {
 	} else {
 		sort.Strings(ls)
 		got := fmt.Sprintf("%#v", ls)
-		exp := fmt.Sprintf("%#v", []string{k2, k1})
+		exp := fmt.Sprintf("%#v", []string{
+			dir + "/k",
+			dir + "/k/a",
+			dir + "/k/a/b",
+			dir + "/k/c",
+			k1,
+		})
 		if got != exp {
 			t.Fatalf("List(%s, true) failed: it should return %s, not %s", dir, exp, got)
 		}
