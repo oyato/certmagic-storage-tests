@@ -21,14 +21,16 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"github.com/caddyserver/certmagic"
 	"math/rand"
 	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/caddyserver/certmagic"
 )
 
 var (
@@ -67,11 +69,12 @@ func (ts *Suite) Run(t *testing.T) {
 }
 
 func (ts *Suite) testLocker(t *testing.T) {
+	ctx := context.Background()
 	key := strconv.Itoa(ts.Rng.Int())
 	if err := ts.S.Unlock(key); err == nil {
 		t.Fatalf("Storage successfully unlocks unlocked key")
 	}
-	if err := ts.S.Lock(key); err != nil {
+	if err := ts.S.Lock(ctx, key); err != nil {
 		t.Fatalf("Storage fails to lock key: %s", err)
 	}
 	if err := ts.S.Unlock(key); err != nil {
@@ -80,7 +83,7 @@ func (ts *Suite) testLocker(t *testing.T) {
 
 	test := func(key string) {
 		for i := 0; i < 5; i++ {
-			if err := ts.S.Lock(key); err != nil {
+			if err := ts.S.Lock(ctx, key); err != nil {
 				// certmagic lockers can timeout
 				continue
 			}
@@ -105,10 +108,11 @@ func (ts *Suite) testLocker(t *testing.T) {
 }
 
 func (ts *Suite) testStorageSingleKey(t *testing.T) {
+	ctx := context.Background()
 	key := ts.randKey()
 	val := []byte(key)
 	sto := ts.S
-	sto.Lock(key)
+	sto.Lock(ctx, key)
 	defer sto.Unlock(key)
 
 	if sto.Exists(key) {
